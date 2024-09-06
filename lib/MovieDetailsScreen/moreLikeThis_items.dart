@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:movies/FireBase/Firebase_Functions.dart';
+import 'package:movies/Models/moviesdetailsModel.dart';
 import '../Models/more_like_this_Model.dart';
 
-class MoreLikeThisSection extends StatelessWidget {
+class MoreLikeThisSection extends StatefulWidget {
   final MoreLikeThisModel? moreLikeThisModel;
   final Function(int) onMovieTap;
 
@@ -13,15 +15,64 @@ class MoreLikeThisSection extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<MoreLikeThisSection> createState() => _MoreLikeThisSectionState();
+
+}
+
+class _MoreLikeThisSectionState extends State<MoreLikeThisSection> {
+  Map<int, bool> wishlistStatus = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeWishlistStatus();
+  }
+
+  Future<void> _initializeWishlistStatus() async {
+    if (widget.moreLikeThisModel != null) {
+      final statuses = await Future.wait(
+        widget.moreLikeThisModel!.results!.map((movie) async {
+          final isInWishlist = await FirebaseFunctions.isMovieInWishlist(movie.id.toString());
+          return MapEntry(movie.id!, isInWishlist);
+        }),
+      );
+      setState(() {
+        wishlistStatus = Map.fromEntries(statuses);
+      });
+    }
+  }
+
+  void _toggleWishlist(int movieId) async {
+    final isAdded = wishlistStatus[movieId] ?? false;
+    setState(() {
+      wishlistStatus[movieId] = !isAdded;
+    });
+
+    if (isAdded) {
+      await FirebaseFunctions.deleteMovieFromWishlist(movieId.toString());
+    } else {
+      final movie = widget.moreLikeThisModel?.results?.firstWhere((movie) => movie.id == movieId);
+      if (movie != null) {
+        final movieDetails = MoviesdetailsModel(
+          id: movie.id,
+          title: movie.title!,
+          releaseDate: movie.releaseDate!,
+          posterPath: movie.posterPath!,
+        );
+        await FirebaseFunctions.addMovieToWishlist(movieDetails);
+      }
+    }
+  }
+  @override
   Widget build(BuildContext context) {
     final height = MediaQuery.of(context).size.height;
     final width = MediaQuery.of(context).size.width;
 
-    return moreLikeThisModel == null
+    return widget.moreLikeThisModel == null
         ? Center(child: CircularProgressIndicator())
         : Container(
       width: width,
-      height: height * 0.30, // Adjust height to be less
+      height: height * 0.30,
       color: Color(0xff282A28),
       child: Padding(
         padding: const EdgeInsets.only(left: 8.0),
@@ -42,13 +93,14 @@ class MoreLikeThisSection extends StatelessWidget {
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: moreLikeThisModel!.results!.map((movie) {
+                  children: widget.moreLikeThisModel!.results!.map((movie) {
+                    final isAdded = wishlistStatus[movie.id!] ?? false;
                     return GestureDetector(
-                      onTap: () => onMovieTap(movie.id!),
+                      onTap: () => widget.onMovieTap(movie.id!),
                       child: Container(
                         width: width * 0.25,
-                        height: 240,// Adjust width as needed
-                        margin: EdgeInsets.symmetric(horizontal: 4.0), // Adjust margin
+                        height: 240,
+                        margin: EdgeInsets.symmetric(horizontal: 4.0),
                         child: Container(
                           decoration: BoxDecoration(
                             color: Color(0xff343534),
@@ -58,8 +110,8 @@ class MoreLikeThisSection extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
-                                width: width * 0.26, // Adjust width as needed
-                                height: height * 0.13, // Adjust height to be less
+                                width: width * 0.26,
+                                height: height * 0.13,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(5),
                                   image: DecorationImage(
@@ -71,9 +123,15 @@ class MoreLikeThisSection extends StatelessWidget {
                                 child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     mainAxisAlignment: MainAxisAlignment.start,
-                                  children: [Image.asset(
-                                    'assets/images/bookmark.png',
-                                  ),
+                                  children: [
+                                    InkWell(
+                                      onTap: () => _toggleWishlist(movie.id!),
+                                      child: Image.asset(
+                                        isAdded
+                                            ? 'assets/images/checkmark.png'
+                                            : 'assets/images/bookmark.png',
+                                      ),
+                                    ),
                             ]
                                 ),
                               ),
@@ -84,7 +142,7 @@ class MoreLikeThisSection extends StatelessWidget {
                                     Icon(
                                       Icons.star_rounded,
                                       color: Color(0xffFFBB3B),
-                                      size: 12, // Adjust size as needed
+                                      size: 12,
                                     ),
                                     SizedBox(width: 4),
                                     Text(
@@ -93,7 +151,7 @@ class MoreLikeThisSection extends StatelessWidget {
                                           : 'No rating',
                                       style: GoogleFonts.poppins(
                                         color: Colors.white,
-                                        fontSize: 10, // Adjust font size as needed
+                                        fontSize: 10,
                                         fontWeight: FontWeight.w400,
                                       ),
                                     ),
@@ -106,7 +164,7 @@ class MoreLikeThisSection extends StatelessWidget {
                                   movie.title ?? 'Unknown Title',
                                   style: GoogleFonts.poppins(
                                     color: Colors.white,
-                                    fontSize: 9, // Adjust font size as needed
+                                    fontSize: 9,
                                     fontWeight: FontWeight.w400,
                                   ),
                                   overflow: TextOverflow.visible,
@@ -118,7 +176,7 @@ class MoreLikeThisSection extends StatelessWidget {
                                   movie.releaseDate ?? 'Unknown release date',
                                   style: TextStyle(
                                       color: Color(0xffB5B4B4),
-                                      fontSize: 8, // Adjust font size as needed
+                                      fontSize: 8,
                                       fontWeight: FontWeight.w400),
                                   overflow: TextOverflow.ellipsis,
                                 ),
